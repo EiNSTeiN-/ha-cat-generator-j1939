@@ -1,0 +1,17 @@
+{
+  "domain": "cat-generator-j1939",
+  "name": "cat-generator-j1939",
+  "codeowners": [
+    "@EiNSTeiN-"
+  ],
+  "version": "0.0.1",
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/EiNSTeiN-/ha-genny",
+  "homekit": {},
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "requirements": ["python-can==4.6.1", "decoda@git+https://github.com/EiNSTeiN-/decoda.git@main"],
+  "ssdp": [],
+  "zeroconf": []
+}

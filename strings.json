@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "name": "Name",
+          "host": "Host",
+          "port": "Port"
+        },
+        "description": "New Cat Generator J1939"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        },
+        "description": "Update Cat Generator J1939"
+      }
+    }
+  }
+}
