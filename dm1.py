@@ -4,10 +4,25 @@ from dataclasses import dataclass
 from enum import Enum
 import logging
 
-from decoda import SPN
+from decoda import BitLength, SPN, ScalarValue
 from decoda.spec_loader import J1939Spec
+from decoda.exceptions import UnknownReferenceError
 
 _LOGGER = logging.getLogger(__name__)
+
+FAILURE_TO_START_SPN = SPN(
+    id=1664,
+    name="Failure to Start",
+    description="The engine failed to start",
+    value_decoder=ScalarValue(
+        units=None,
+        min=None,
+        max=None,
+        offset=None,
+        scale=None,
+        bit_length=BitLength(1),
+    ),
+)
 
 
 class LampStatus(Enum):
@@ -199,7 +214,16 @@ def parse_dtc(spec: J1939Spec, bytes_: bytes) -> DTC | None:
     if spn_id == 0:
         return None
 
-    return DTC(spn=spec.SPNs.get_by_id(spn_id), fmi=fmi, oc=oc, cm=cm)
+    if spn_id == 1664:
+        # TODO: should be moved to decoda.json
+        spn = FAILURE_TO_START_SPN
+    else:
+        try:
+            spn = spec.SPNs.get_by_id(spn_id)
+        except UnknownReferenceError:
+            return None
+
+    return DTC(spn=spn, fmi=fmi, oc=oc, cm=cm)
 
 
 def parse(spec: J1939Spec, data: bytes) -> DM1Message:

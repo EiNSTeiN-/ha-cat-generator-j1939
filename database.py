@@ -346,24 +346,36 @@ class GeneratorDatabase:
         with self.lock:
             return self.diagnostics.get(spn.id, None)
 
+    def restore_diagnostics(self, diagnostics: list[DiagnosticValue]) -> None:
+        """Restore diagnostic values in the database."""
+        with self.lock:
+            for diagnostic in diagnostics:
+                self.diagnostics[diagnostic.spn.id] = diagnostic
+
+                event = GeneratorDatabaseAddedEvent[DiagnosticValue](value=diagnostic)
+                for callback in self._callbacks:
+                    self.hass.loop.call_soon_threadsafe(callback, event)
+
     def set_diagnostics(self, diagnostics: list[DTC]) -> None:
         """Update a value in the database."""
         with self.lock:
             current_spn_ids = {dtc.spn.id for dtc in diagnostics}
-            for diagnostic in self.diagnostics.values():
-                if diagnostic.spn.id not in current_spn_ids:
-                    prev = self.diagnostics[diagnostic.spn.id]
-                    self.diagnostics[diagnostic.spn.id] = new = DiagnosticValue(
-                        spn=diagnostic.spn,
-                        failure_mode_identifier=prev.failure_mode_identifier,
-                        occurences=prev.occurences,
-                        present=False,
-                    )
-                    event = GeneratorDatabaseUpdatedEvent[DiagnosticValue](
-                        value=new, old_value=prev
-                    )
-                    for callback in self._callbacks:
-                        self.hass.loop.call_soon_threadsafe(callback, event)
+            for diagnostic in list(self.diagnostics.values()):
+                if diagnostic.spn.id in current_spn_ids:
+                    continue
+
+                prev = diagnostic
+                self.diagnostics[diagnostic.spn.id] = new = DiagnosticValue(
+                    spn=diagnostic.spn,
+                    failure_mode_identifier=prev.failure_mode_identifier,
+                    occurences=prev.occurences,
+                    present=False,
+                )
+                event = GeneratorDatabaseUpdatedEvent[DiagnosticValue](
+                    value=new, old_value=prev
+                )
+                for callback in self._callbacks:
+                    self.hass.loop.call_soon_threadsafe(callback, event)
 
             for diagnostic in diagnostics:
                 if diagnostic.spn.id not in self.diagnostics:

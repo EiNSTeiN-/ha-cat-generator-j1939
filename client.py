@@ -41,8 +41,12 @@ class MessageHandler(ABC):
                 return
 
             if m.pgn.id == 65226:
-                # PGN 59904 is a request PGN, ignore it
-                decoded = dm1.parse(self.spec, m.pgn.payload)
+                try:
+                    decoded = dm1.parse(self.spec, m.pgn.payload)
+                except Exception:
+                    _LOGGER.exception("Error decoding DM1 message")
+                    return
+
                 _LOGGER.warning(
                     f"p={m.priority!r}  src={m.src_address!r}  dst={m.dst_address!r}  pgn={m.pgn.id!r}  {decoded!r}"
                 )
@@ -53,7 +57,7 @@ class MessageHandler(ABC):
                 return
 
             _LOGGER.warning(
-                f"p={m.priority!r}  src={m.src_address!r}  dst={m.dst_address!r}  pgn={m.pgn.id!r}  Unknown PGN"
+                f"p={m.priority!r}  src={m.src_address!r}  dst={m.dst_address!r}  pgn={m.pgn.id!r}  Unknown PGN {m.pgn.payload!r}"
             )
             return
 

@@ -98,6 +98,7 @@ async def async_setup_entry(
     # config_entry.runtime_data.client.request_pgn(PGN(65227, "", "", 0, 0, []), -1)
 
     seen_dtc = list({(v,) for (v,) in store_data.get("seen_dtc", [])})
+    known_dtcs: list[DiagnosticValue] = []
     for (spn_id,) in seen_dtc:
         try:
             spn = spec.SPNs.get_by_id(spn_id)
@@ -105,12 +106,10 @@ async def async_setup_entry(
             _LOGGER.warning("Unknown SPN ID %s in storage, skipping", spn_id)
             continue
 
-        create_or_set_diagnostic_sensor_value(
-            hass,
-            config_entry,
-            async_add_entities,
-            DiagnosticValue(spn, -1, -1, None),
-        )
+        known_dtcs.append(DiagnosticValue(spn, -1, -1, None))
+
+    _LOGGER.debug("Restoring seen diagnostics: %r", known_dtcs)
+    config_entry.runtime_data.database.restore_diagnostics(known_dtcs)
 
     seen_lamp = list({(v,) for (v,) in store_data.get("seen_lamp", [])})
     for (name,) in seen_lamp:
@@ -745,7 +744,10 @@ class GeneratorDiagnosticTroubleCodeFailureMoodeSensorEntity(  # pyright: ignore
     def is_available(self) -> bool:
         """Returns true when lamp status is available."""
         return (
-            self._restored_data is not None
+            (
+                self._restored_data is not None
+                and self._restored_data.native_value in FMI_VALUES.values()
+            )
             or (self._value.is_available and self._value.failure_mode_identifier >= 0)
         ) and super().is_available()
 
@@ -754,6 +756,7 @@ class GeneratorDiagnosticTroubleCodeFailureMoodeSensorEntity(  # pyright: ignore
         if self._restored_data:
             self._attr_native_value = self._restored_data.native_value
 
+            self._attr_extra_state_attributes = {"restored": True}
         elif self._value.failure_mode_identifier >= 0:
             self._attr_native_value = self._value.display
 
@@ -763,6 +766,7 @@ class GeneratorDiagnosticTroubleCodeFailureMoodeSensorEntity(  # pyright: ignore
             }
         else:
             self._attr_native_value = "Unknown"
+            self._attr_extra_state_attributes = {"restored": True}
 
 
 class GeneratorDiagnosticTroubleCodeOccurencesSensorEntity(  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -786,7 +790,13 @@ class GeneratorDiagnosticTroubleCodeOccurencesSensorEntity(  # pyright: ignore[r
         """Set the current value."""
         if self._restored_data:
             self._attr_native_value = self._restored_data.native_value
-        elif self._value.occurences >= 0:
+
+            self._attr_extra_state_attributes = {"restored": True}
+            return
+
+        self._attr_extra_state_attributes = {}
+
+        if self._value.occurences >= 0:
             self._attr_native_value = self._value.occurences
         else:
             self._attr_native_value = "Unknown"
@@ -813,8 +823,10 @@ class GeneratorDiagnosticTroubleCodeAlarmSensorEntity(  # pyright: ignore[report
         """Set the current value."""
         if self._restored_data:
             self.is_on = self._restored_data.native_value == "on"
+            self._attr_extra_state_attributes = {"restored": True}
         else:
             self.is_on = self._value.present is True
+            self._attr_extra_state_attributes = {}
 
 
 DTC_SENSORS: dict[str, type[GeneratorDiagnosticSensorEntity[DiagnosticValue]]] = {
@@ -845,8 +857,10 @@ class GeneratorLampAlarmSensorEntity(  # pyright: ignore[reportIncompatibleVaria
         """Set the current value."""
         if self._restored_data:
             self.is_on = self._restored_data.native_value == "on"
+            self._attr_extra_state_attributes = {"restored": True}
         else:
             self.is_on = self._value.is_active
+            self._attr_extra_state_attributes = {}
 
 
 class GeneratorLampFlashStatusSensorEntity(  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -879,15 +893,22 @@ class GeneratorLampFlashStatusSensorEntity(  # pyright: ignore[reportIncompatibl
     def is_available(self) -> bool:
         """Returns true when lamp status is available."""
         return (
-            self._restored_data is not None or self._value.is_available
+            (
+                self._restored_data is not None
+                and self._restored_data.native_value
+                in {value.value for value in BlinkDisplayValue}
+            )
+            or self._value.is_available
         ) and super().is_available()
 
     def update(self) -> None:
         """Set the current value."""
         if self._restored_data:
             self._attr_native_value = self._restored_data.native_value
+            self._attr_extra_state_attributes = {"restored": True}
         else:
             self._attr_native_value = self._value.blink.value
+            self._attr_extra_state_attributes = {}
 
 
 LAMP_SENSORS: dict[str, type[GeneratorDiagnosticSensorEntity[LampFlashStatus]]] = {
